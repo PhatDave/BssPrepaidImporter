@@ -1,0 +1,17 @@
+{
+  "name": "bssimporter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "main": "node main.js",
+    "deploy": "pkg main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cli-progress": "^3.11.2",
+    "pg": "^8.8.0"
+  }
+}
