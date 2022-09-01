@@ -42,14 +42,15 @@ function getArg(index, check, defaultValue, errorMessage) {
 }
 
 if (cluster.isPrimary) {
-	if (process.argv.length < 4) {
+	if (process.argv.length < 7) {
 		log(FgRed + "Insufficient parameters")
-		log(`Usage: ${FgYellow}main-<system> <textFile> <connectionString>`);
-		// Fix these, I cba to do it right now
-		log("Text file is expected to have a list of msisdns to be removed separated by newline");
+		log(`Usage: ${FgYellow}main-<system> <textFile1> <textFile2> <connectionString> <threads> <batchSize>`);
+		log("Text files are csv files containing msisdn and prepaid columns");
 		log(`Connection string is expected in the form of ${FgYellow}user:password@host:port/database`);
-		log(`Example: ${FgGreen}./main-win.exe lista.txt mgw3:mgw3@localhost:5432/mgw3`);
-		log(`Example: ${FgGreen}./main-linux lista.txt mgw3:mgw3@localhost:5432/mgw3`);
+		log(`Threads is the number of parallel processes to run, does not affect performance greatly`);
+		log(`Batch size is the number of records to process in each batch, does affect performance greatly and should be kept reasonable, recommended < 16k`);
+		log(`Example: ${FgGreen}./main-win.exe prepaid_true.txt prepaid_false.txt bss:bss@localhost:5434/bss 4 8192`);
+		log(`Example: ${FgGreen}./main-linux prepaid_true.txt prepaid_false.txt bss:bss@localhost:5434/bss 4 8192`);
 		process.exit(1);
 	} else {
 		let fileTrue = getArg(2, (x) => fs.existsSync(x), null, "File does not exist");
@@ -137,6 +138,7 @@ if (cluster.isPrimary) {
 				}
 				fileData.push(data);
 			});
+			log(`Loaded ${fileData.length} msisdns`);
 
 			class ProgressTracker {
 				static threadProgress = [];
@@ -269,29 +271,33 @@ if (cluster.isPrimary) {
 				query += ";";
 
 				// log(`Inserting ${this.itemsToInsert.length} rows`);
+
 				await this.client.query(query).then(() => {
 					// log(`Inserted ${this.itemsToInsert.length} rows`);
-					this.itemsToInsert = [];
 					process.send({
 						cmd: "update",
 						threadId: threadId,
 						batchSize: batchSize
 					});
+					this.itemsToInsert = [];
 					resolve();
 				});
+
+				// this.itemsToInsert = [];
+				// resolve();
 			});
 		}
 	}
+
 	connectToDb(client).then(async () => {
 		let queryManager = new QueryManager(client, batchSize);
-		for (let i = data.length - 1; i >= 0; i--) {
+		for (let i = 0; i < data.length; i++) {
 			let item = data[i];
 			await queryManager.insert(item);
 			if (i === data.length - 2) {
 				await queryManager.doInsertQuery();
 			}
 		}
-		client.disconnect();
 		log(`${FgGreen}Thread ${threadId} finished`);
 		process.exit(0);
 	});
